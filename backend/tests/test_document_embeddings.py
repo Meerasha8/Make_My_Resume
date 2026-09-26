@@ -1,3 +1,4 @@
+import json
 import os
 import unittest
 from uuid import UUID
@@ -155,6 +156,27 @@ class DocumentEmbeddingRouteTests(unittest.TestCase):
         self.assertEqual(download.status_code, 200, download.text)
         self.assertTrue(download.content.startswith(b"PK"))  # DOCX files are zip archives
         self.assertIn("attachment;", download.headers["content-disposition"])
+
+    def test_download_handles_text_column_and_old_format(self) -> None:
+        # Supabase stores resume_content in a `text` column (JSON string), and older resumes used a flat skills list.
+        session = self.TestingSessionLocal()
+        old_format = {"summary": "x", "skills": ["Python", "PostgreSQL", "Docker"], "experience": [], "projects": [
+            {"name": "Portfolio app", "highlights": ["Built it"]}], "education": [], "certificates": []}
+        new_format = {"skills": [{"category": "Languages", "items": ["Python"]}], "projects": [], "achievements": ["Won"]}
+        for job_id, content in (("11111111-1111-1111-1111-111111111111", json.dumps(old_format)),
+                                ("22222222-2222-2222-2222-222222222222", json.dumps(new_format))):
+            session.add(ResumeHistory(job_id=job_id, user_uuid="00000000-0000-0000-0000-000000000001",
+                                      job_description="jd", status="completed", resume_content=content))
+        session.commit()
+        session.close()
+
+        for job_id in ("11111111-1111-1111-1111-111111111111", "22222222-2222-2222-2222-222222222222"):
+            response = self.client.get(f"/resume/generate/{job_id}/download")
+            self.assertEqual(response.status_code, 200, response.text)
+            self.assertTrue(response.content.startswith(b"PK"))
+
+        preview = self.client.get("/resume/generate/11111111-1111-1111-1111-111111111111/preview").json()
+        self.assertEqual([group["category"] for group in preview["content"]["skills"]], ["Languages", "Databases", "Deployment & Tools"])
 
 
 class RetrievalTests(unittest.TestCase):

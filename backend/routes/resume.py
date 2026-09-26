@@ -1,3 +1,4 @@
+import json
 import re
 import uuid
 from datetime import datetime
@@ -22,7 +23,7 @@ from models import (
     UserDetails,
     _uuid_value,
 )
-from resume_service import ResumeContent, ResumeService
+from resume_service import ResumeContent, ResumeService, group_skills
 
 router = APIRouter(prefix="/resume", tags=["Resume"])
 
@@ -59,6 +60,22 @@ class ResumeHistoryListResponse(BaseModel):
     items: list[ResumeHistoryItem]
     limit: int
     offset: int
+
+
+def _stored_content(job: ResumeHistory) -> ResumeContent:
+    """Read resume_content back as a ResumeContent.
+
+    The Supabase column is `text`, not `jsonb`, so the saved JSON comes back as a string. Resumes made before the fixed
+    skill categories stored skills as a flat list of names; those are regrouped so old resumes still download.
+    """
+    raw = job.resume_content
+    if isinstance(raw, str):
+        raw = json.loads(raw) if raw.strip() else {}
+    raw = dict(raw or {})
+    skills = raw.get("skills") or []
+    if skills and all(isinstance(skill, str) for skill in skills):
+        raw["skills"] = [group.model_dump() for group in group_skills([(skill, None) for skill in skills])]
+    return ResumeContent.model_validate(raw)
 
 
 def _collect_user_resume_data(db: Session, user_uuid: str) -> dict[str, Any]:
@@ -175,7 +192,10 @@ def resume_job_preview(
         raise HTTPException(status_code=404, detail="Job not found")
 
     user_data = _collect_user_resume_data(db, job.user_uuid)
-    content = getattr(job, "resume_content", None)
+    try:
+        content = _stored_content(job).model_dump() if job.resume_content else None
+    except (ValueError, ValidationError):
+        content = None
     if not content:
         service = ResumeService()
         content = service.select_resume_content(job.job_description, user_data).model_dump()
@@ -225,8 +245,8 @@ def resume_job_download(
     # The DOCX is rebuilt from the stored content instead of being kept on disk, because hosts like Render
     # wipe the filesystem on every restart/redeploy.
     try:
-        content = ResumeContent.model_validate(job.resume_content or {})
-    except ValidationError:
+        content = _stored_content(job)
+    except (ValueError, ValidationError):  # json.JSONDecodeError is a ValueError
         raise HTTPException(status_code=410, detail="This resume was made by an older version of the app. Please generate it again.")
     user_details = _collect_user_resume_data(db, job.user_uuid)["user_details"]
     doc_bytes = ResumeService().render_docx(content, user_details)
