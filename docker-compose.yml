@@ -1,0 +1,11 @@
+# Local all-in-one run: API + React app on http://localhost:8000
+services:
+  app:
+    build:
+      context: .
+      target: full
+    image: make-my-resume
+    env_file: .env
+    ports:
+      - "8000:8000"
+    restart: unless-stopped

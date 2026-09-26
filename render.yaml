@@ -1,0 +1,31 @@
+# Render Blueprint for the backend API (New > Blueprint, select this repo).
+# The frontend is deployed separately on Vercel (Root Directory: frontend).
+services:
+  - type: web
+    name: make-my-resume-api
+    runtime: docker
+    plan: free
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
+    healthCheckPath: /health
+    autoDeploy: true
+    envVars:
+      - key: GROQ_API_KEY
+        sync: false
+      - key: GROQ_CHAT_MODEL
+        value: openai/gpt-oss-120b
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_KEY
+        sync: false
+      # Use the Supabase *pooler* connection string (Render has no IPv6, so the direct db.<ref>.supabase.co host fails)
+      - key: SUPABASE_DB_URL
+        sync: false
+      - key: SUPABASE_JWKS_URL
+        sync: false
+      # Your Vercel production URL, e.g. https://make-my-resume.vercel.app (no trailing slash)
+      - key: CORS_ALLOWED_ORIGINS
+        sync: false
+      # Optional: allow Vercel preview deployments, e.g. https://make-my-resume-.*\.vercel\.app
+      - key: CORS_ALLOWED_ORIGIN_REGEX
+        sync: false

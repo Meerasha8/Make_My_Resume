@@ -1,0 +1,29 @@
+# Environment
+.env
+.env.*
+!.env.example
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.pytest_cache/
+*.db
+backend/generated_resumes/
+backend/static/
+
+# Node / frontend
+node_modules/
+dist/
+*.local
+*.log
+
+# Editors / OS
+.vscode/*
+!.vscode/extensions.json
+.idea/
+.DS_Store
+
+# Private interview/system notes (never pushed)
+INTERVIEW_NOTES.md
